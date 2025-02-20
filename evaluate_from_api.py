@@ -20,132 +20,6 @@ from benchflow import BenchClient
 API_KEY = ""
 
 
-def get_client():
-    if args.model_name in ["gpt-4", "gpt-4o", "o1-preview"]:
-        openai.api_key = API_KEY
-        client = openai
-    elif args.model_name in ["deepseek-chat", "deepseek-coder"]:
-        client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com/")
-    elif args.model_name in ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest",
-                             "gemini-1.5-flash-8b", "gemini-002-pro", "gemini-002-flash"]:
-        genai.configure(api_key=API_KEY)
-        generation_config = {
-            "temperature": 0.0,
-            "top_p": 1,
-            "max_output_tokens": 4000,
-            "response_mime_type": "text/plain",
-        }
-        safety_settings = [
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_NONE",
-            },
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH",
-                "threshold": "BLOCK_NONE",
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_NONE",
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_NONE",
-            },
-        ]
-        client = genai.GenerativeModel(
-            model_name=args.model_name,
-            safety_settings=safety_settings,
-            generation_config=generation_config,
-        )
-    elif args.model_name in ["claude-3-opus-20240229", "claude-3-sonnet-20240229"]:
-        client = anthropic.Anthropic(
-            api_key=API_KEY,
-        )
-    elif args.model_name in ["jamba-1.5-large"]:
-        client = AI21Client(api_key=API_KEY)
-    elif args.model_name in ["iask"]:
-        client = {"Authorization": f"Bearer {API_KEY}"}
-    else:
-        client = None
-        print("For other model API calls, please implement the client definition method yourself.")
-    return client
-
-
-def call_api(client, instruction, inputs):
-    start = time.time()
-    if args.model_name in ["gpt-4", "gpt-4o", "deepseek-chat", "deepseek-coder"]:
-        message_text = [{"role": "user", "content": instruction + inputs}]
-        completion = client.chat.completions.create(
-          model=args.model_name,
-          messages=message_text,
-          temperature=0,
-          max_tokens=4000,
-          top_p=1,
-          frequency_penalty=0,
-          presence_penalty=0,
-        )
-        result = completion.choices[0].message.content
-    elif args.model_name in ["o1-preview"]:
-        message_text = [{"role": "user", "content": instruction + inputs}]
-        completion = client.chat.completions.create(
-          model=args.model_name,
-          messages=message_text,
-        )
-        result = completion.choices[0].message.content
-    elif args.model_name in ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest", "gemini-1.5-flash-8b"]:
-        chat_session = client.start_chat(
-            history=[]
-        )
-        result = chat_session.send_message(instruction + inputs).text
-    elif args.model_name in ["claude-3-opus-20240229", "claude-3-sonnet-20240229"]:
-        message = client.messages.create(
-            model=args.model_name,
-            max_tokens=4000,
-            system="",
-            messages=[
-                {"role": "user", "content": instruction + inputs}
-            ],
-            temperature=0.0,
-            top_p=1,
-        )
-        result = message.content[0].text
-    elif args.model_name in ["jamba-1.5-large"]:
-        message_text = [ChatMessage(content=instruction + inputs, role="user")]
-        completion = client.chat.completions.create(
-            model=args.model_name,
-            messages=message_text,
-            documents=[],
-            tools=[],
-            n=1,
-            max_tokens=2048,
-            temperature=0,
-            top_p=1,
-            stop=[],
-            response_format=ResponseFormat(type="text"),
-        )
-        result = completion.choices[0].message.content
-    elif args.model_name in ["iask"]:
-        payload = {
-            "prompt": instruction + inputs,
-            "mode": "truth",
-            "detail_level": "detailed",
-            "stream": False
-        }
-        response = requests.post("https://api.iask.ai/v1/query", headers=client, json=payload, timeout=300)
-        if response.status_code != 200:
-            print("API call failed with status code", response.status_code, response.json())
-            return response.json()["response"]["message"]
-        else:
-            result = response.json()["response"]["message"]
-        return result
-    else:
-        print("For other model API calls, please implement the request method yourself.")
-        result = None
-    print("cost time", time.time() - start)
-    return result
-
-
 def load_mmlu_pro():
     dataset = load_dataset("TIGER-Lab/MMLU-Pro")
     test_df, val_df = dataset["test"], dataset["validation"]
@@ -215,34 +89,6 @@ def extract_final(text):
         return None
 
 
-def single_request(client, single_question, cot_examples_dict, exist_result):
-    exist = True
-    q_id = single_question["question_id"]
-    for each in exist_result:
-        if q_id == each["question_id"] and single_question["question"] == each["question"]:
-            pred = extract_answer(each["model_outputs"])
-            return pred, each["model_outputs"], exist
-    exist = False
-    category = single_question["category"]
-    cot_examples = cot_examples_dict[category]
-    question = single_question["question"]
-    options = single_question["options"]
-    prompt = "The following are multiple choice questions (with answers) about {}. Think step by" \
-             " step and then output the answer in the format of \"The answer is (X)\" at the end.\n\n" \
-        .format(category)
-    for each in cot_examples:
-        prompt += format_example(each["question"], each["options"], each["cot_content"])
-    input_text = format_example(question, options)
-    try:
-        response = call_api(client, prompt, input_text)
-        response = response.replace('**', '')
-    except Exception as e:
-        print("error", e)
-        return None, None, exist
-    pred = extract_answer(response)
-    return pred, response, exist
-
-
 def update_result(output_res_path):
     category_record = {}
     res = []
@@ -286,7 +132,6 @@ def merge_result(res, curr):
 
 
 def evaluate(subjects, agent_url, start_index, end_index):
-    client = get_client()
     test_df, dev_df = load_mmlu_pro()
     if not subjects:
         subjects = list(test_df.keys())
@@ -306,7 +151,6 @@ def evaluate(subjects, agent_url, start_index, end_index):
                 "input_text": dev_df
             }
             action = bench_client.get_action(env)
-            # pred, response, exist = single_request(client, each, dev_df, res)
             pred = action["action"]
             response = action["response"]
             if response is not None:
