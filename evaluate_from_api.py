@@ -7,6 +7,7 @@ import json
 import re
 import random
 from tqdm import tqdm
+from typing import Dict, Any
 import time
 from datasets import load_dataset
 import argparse
@@ -14,6 +15,7 @@ import requests
 from ai21 import AI21Client
 from ai21.models.chat import ChatMessage, ResponseFormat, DocumentSchema, FunctionToolDefinition
 from ai21.models.chat import ToolDefinition, ToolParameters
+from benchflow import BenchClient
 
 API_KEY = ""
 
@@ -283,14 +285,15 @@ def merge_result(res, curr):
     return res
 
 
-def evaluate(subjects):
+def evaluate(subjects, agent_url, start_index, end_index):
     client = get_client()
     test_df, dev_df = load_mmlu_pro()
     if not subjects:
         subjects = list(test_df.keys())
     print("assigned subjects", subjects)
+    bench_client = MMLUClient(agent_url)
     for subject in subjects:
-        test_data = test_df[subject]
+        test_data = test_df[subject][start_index:end_index]
         output_res_path = os.path.join(args.output_dir, subject + "_result.json")
         output_summary_path = os.path.join(args.output_dir, subject + "_summary.json")
         res, category_record = update_result(output_res_path)
@@ -298,7 +301,14 @@ def evaluate(subjects):
         for each in tqdm(test_data):
             label = each["answer"]
             category = subject
-            pred, response, exist = single_request(client, each, dev_df, res)
+            env = {
+                "each": each,
+                "input_text": dev_df
+            }
+            action = bench_client.get_action(env)
+            # pred, response, exist = single_request(client, each, dev_df, res)
+            pred = action["action"]
+            response = action["response"]
             if response is not None:
                 res, category_record = update_result(output_res_path)
                 if category not in category_record:
@@ -350,9 +360,36 @@ def save_summary(category_record, output_summary_path):
         fo.write(json.dumps(category_record))
 
 
+class MMLUClient(BenchClient):
+    def __init__(self, agent_url):
+        super().__init__(agent_url, 3)
+
+    def prepare_environment(self, env: Dict[str, Any]) -> Dict[str, Any]:
+        single_question = env["each"]
+        cot_examples_dict = env["input_text"]
+        category = single_question["category"]
+        cot_examples = cot_examples_dict[category]
+        question = single_question["question"]
+        options = single_question["options"]
+        prompt = "The following are multiple choice questions (with answers) about {}. Think step by" \
+                " step and then output the answer in the format of \"The answer is (X)\" at the end.\n\n" \
+            .format(category)
+        for each in cot_examples:
+            prompt += format_example(each["question"], each["options"], each["cot_content"])
+        input_text = format_example(question, options)
+        return {"env_info": {"prompt": prompt, "input_text": input_text, "entry": single_question, "cot_examples_dict": cot_examples_dict}}
+    
+    def parse_action(self, raw_action: str) -> Dict[str, Any]:
+        pred = extract_answer(raw_action)
+        return {"action": pred, "response": raw_action}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir", "-o", type=str, default="eval_results/")
+    parser.add_argument("--agent_url", "-b", type=str)
+    parser.add_argument("--start_index", "-s", type=int, default=0)
+    parser.add_argument("--end_index", "-e", type=int, default=None)
     parser.add_argument("--model_name", "-m", type=str, default="gpt-4",
                         choices=["gpt-4", "gpt-4o", "o1-preview",
                                  "deepseek-chat", "deepseek-coder",
@@ -372,4 +409,4 @@ if __name__ == "__main__":
     else:
         assigned_subjects = args.assigned_subjects.split(",")
     os.makedirs(args.output_dir, exist_ok=True)
-    evaluate(assigned_subjects)
+    evaluate(assigned_subjects, args.agent_url, args.start_index, args.end_index)
