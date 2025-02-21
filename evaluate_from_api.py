@@ -123,14 +123,14 @@ def merge_result(res, curr):
     return res
 
 
-def evaluate(subjects, agent_url, start_index, end_index):
+def evaluate(subjects, agent_url):
     test_df, dev_df = load_mmlu_pro()
     if not subjects:
         subjects = list(test_df.keys())
     print("assigned subjects", subjects)
     bench_client = MMLUClient(agent_url)
     for subject in subjects:
-        test_data = test_df[subject][start_index:end_index]
+        test_data = test_df[subject][:1]
         output_res_path = os.path.join(args.output_dir, subject + "_result.json")
         output_summary_path = os.path.join(args.output_dir, subject + "_summary.json")
         res, category_record = update_result(output_res_path)
@@ -224,8 +224,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir", "-o", type=str, default="eval_results/")
     parser.add_argument("--agent_url", "-b", type=str)
-    parser.add_argument("--start_index", "-s", type=int, default=0)
-    parser.add_argument("--end_index", "-e", type=int, default=None)
     parser.add_argument("--model_name", "-m", type=str, default="gpt-4",
                         choices=["gpt-4", "gpt-4o", "o1-preview",
                                  "deepseek-chat", "deepseek-coder",
@@ -245,4 +243,4 @@ if __name__ == "__main__":
     else:
         assigned_subjects = args.assigned_subjects.split(",")
     os.makedirs(args.output_dir, exist_ok=True)
-    evaluate(assigned_subjects, args.agent_url, args.start_index, args.end_index)
+    evaluate(assigned_subjects, args.agent_url)
