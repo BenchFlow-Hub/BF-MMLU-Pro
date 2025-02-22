@@ -130,7 +130,7 @@ def evaluate(subjects, agent_url):
     print("assigned subjects", subjects)
     bench_client = MMLUClient(agent_url)
     for subject in subjects:
-        test_data = test_df[subject][:1]
+        test_data = test_df[subject]
         output_res_path = os.path.join(args.output_dir, subject + "_result.json")
         output_summary_path = os.path.join(args.output_dir, subject + "_summary.json")
         res, category_record = update_result(output_res_path)
