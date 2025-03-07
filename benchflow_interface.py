@@ -35,7 +35,7 @@ class MMLUPROBench(BaseBench):
                 task_id=task_id,
                 is_resolved=True,
                 metrics={"score": summary['total']['acc']},
-                log=log,
+                log={"result": log},
                 other={"details": summary},
             )
         except Exception as e:
