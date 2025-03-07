@@ -142,7 +142,7 @@ def evaluate(subjects, agent_url):
                 "each": each,
                 "input_text": dev_df
             }
-            action = bench_client.get_action(env)
+            action = bench_client.get_response(env)
             pred = action["action"]
             response = action["response"]
             if response is not None:
@@ -200,7 +200,7 @@ class MMLUClient(BenchClient):
     def __init__(self, agent_url):
         super().__init__(agent_url, 3)
 
-    def prepare_environment(self, env: Dict[str, Any]) -> Dict[str, Any]:
+    def prepare_input(self, env: Dict[str, Any]) -> Dict[str, Any]:
         single_question = env["each"]
         cot_examples_dict = env["input_text"]
         category = single_question["category"]
@@ -213,11 +213,11 @@ class MMLUClient(BenchClient):
         for each in cot_examples:
             prompt += format_example(each["question"], each["options"], each["cot_content"])
         input_text = format_example(question, options)
-        return {"env_info": {"prompt": prompt, "input_text": input_text, "entry": single_question, "cot_examples_dict": cot_examples_dict}}
+        return {"prompt": prompt, "input_text": input_text, "entry": single_question, "cot_examples_dict": cot_examples_dict}
     
-    def parse_action(self, raw_action: str) -> Dict[str, Any]:
-        pred = extract_answer(raw_action)
-        return {"action": pred, "response": raw_action}
+    def parse_response(self, raw_response: str) -> Dict[str, Any]:
+        pred = extract_answer(raw_response)
+        return {"action": pred, "response": raw_response}
 
 
 if __name__ == "__main__":

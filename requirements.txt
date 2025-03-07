@@ -5,4 +5,4 @@ transformers>=4.40.2
 anthropic>=0.34.2
 google.generativeai>=0.8.2
 ai21>=3.0.2
-benchflow>=0.1.7
+benchflow>=0.1.12
