@@ -123,12 +123,12 @@ def merge_result(res, curr):
     return res
 
 
-def evaluate(subjects, agent_url):
+def evaluate(subjects, intelligence_url):
     test_df, dev_df = load_mmlu_pro()
     if not subjects:
         subjects = list(test_df.keys())
     print("assigned subjects", subjects)
-    bench_client = MMLUClient(agent_url)
+    bench_client = MMLUClient(intelligence_url)
     for subject in subjects:
         test_data = test_df[subject]
         output_res_path = os.path.join(args.output_dir, subject + "_result.json")
@@ -197,8 +197,8 @@ def save_summary(category_record, output_summary_path):
 
 
 class MMLUClient(BenchClient):
-    def __init__(self, agent_url):
-        super().__init__(agent_url, 3)
+    def __init__(self, intelligence_url):
+        super().__init__(intelligence_url, 3)
 
     def prepare_input(self, env: Dict[str, Any]) -> Dict[str, Any]:
         single_question = env["each"]
@@ -223,7 +223,7 @@ class MMLUClient(BenchClient):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir", "-o", type=str, default="eval_results/")
-    parser.add_argument("--agent_url", "-b", type=str)
+    parser.add_argument("--intelligence_url", "-b", type=str)
     parser.add_argument("--model_name", "-m", type=str, default="gpt-4",
                         choices=["gpt-4", "gpt-4o", "o1-preview",
                                  "deepseek-chat", "deepseek-coder",
@@ -243,4 +243,4 @@ if __name__ == "__main__":
     else:
         assigned_subjects = args.assigned_subjects.split(",")
     os.makedirs(args.output_dir, exist_ok=True)
-    evaluate(assigned_subjects, args.agent_url)
+    evaluate(assigned_subjects, args.intelligence_url)
